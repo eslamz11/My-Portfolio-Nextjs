@@ -8,7 +8,7 @@ export async function getPersonalData() {
   try {
     const docRef = doc(db, 'portfolio', 'personalData');
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       return docSnap.data();
     } else {
@@ -31,14 +31,14 @@ export async function getPersonalData() {
 export async function getAllProjects() {
   try {
     const projectsRef = collection(db, 'projects');
-    const q = query(projectsRef, orderBy('order', 'asc'));
-    const querySnapshot = await getDocs(q);
-    
+    // جلب جميع الوثائق أولاً لتجنب استثناء الوثائق التي تفتقر لحقل 'order'
+    const querySnapshot = await getDocs(projectsRef);
+
     const projects = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
       projects.push({
-        id: data.id,
+        id: data.id || doc.id,
         name: data.name,
         name_ar: data.name_ar || '',
         description: data.description,
@@ -52,12 +52,15 @@ export async function getAllProjects() {
         image: data.image || '/image/placeholder.png',
         project_images: data.project_images || [],
         videos: data.videos || [],
-        order: data.order || 0,
-        featured: data.featured !== undefined ? data.featured : true,
+        order: parseInt(data.order) || 0,
+        featured: data.featured !== undefined ? (data.featured === true || data.featured === 'true') : true,
         type: data.type || 'regular'
       });
     });
-    
+
+    // ترتيب المشاريع في الذاكرة
+    projects.sort((a, b) => a.order - b.order);
+
     if (projects.length > 0) {
       return projects;
     } else {
@@ -80,14 +83,14 @@ export async function getAllProjects() {
 export async function getFeaturedProjects(limitCount = 6) {
   try {
     const projectsRef = collection(db, 'projects');
-    // Get all projects and filter/sort in memory to avoid composite index requirement
+    // جلب جميع المشاريع وتصفيتها في الذاكرة لتجنب الحاجة إلى فهارس مركبة (composite indexes)
     const querySnapshot = await getDocs(projectsRef);
-    
+
     const projects = [];
     querySnapshot.forEach((doc) => {
       const data = doc.data();
       projects.push({
-        id: data.id,
+        id: data.id || doc.id,
         name: data.name,
         name_ar: data.name_ar || '',
         description: data.description,
@@ -101,18 +104,18 @@ export async function getFeaturedProjects(limitCount = 6) {
         image: data.image || '/image/placeholder.png',
         project_images: data.project_images || [],
         videos: data.videos || [],
-        order: data.order || 0,
-        featured: data.featured !== undefined ? data.featured : true,
+        order: parseInt(data.order) || 0,
+        featured: data.featured !== undefined ? (data.featured === true || data.featured === 'true') : true,
         type: data.type || 'regular'
       });
     });
-    
-    // Filter featured projects, sort by order, and limit in memory
+
+    // تصفية المشاريع المميزة، ترتيبها، وتحديد العدد المطلوب
     const featuredProjects = projects
       .filter(p => p.featured === true)
       .sort((a, b) => a.order - b.order)
       .slice(0, limitCount);
-    
+
     if (featuredProjects.length > 0) {
       return featuredProjects;
     } else {
@@ -135,7 +138,11 @@ export async function getFeaturedProjects(limitCount = 6) {
 export async function getProjectById(id) {
   try {
     const projects = await getAllProjects();
-    return projects.find(p => p.id === parseInt(id));
+    // البحث عن المشروع مع دعم الـ IDs الرقمية والنصية
+    return projects.find(p =>
+      p.id?.toString() === id?.toString() ||
+      parseInt(p.id) === parseInt(id)
+    );
   } catch (error) {
     console.error('Error fetching project by ID:', error);
     return null;
@@ -149,7 +156,7 @@ export async function getAllSkills() {
   try {
     const docRef = doc(db, 'portfolio', 'skills');
     const docSnap = await getDoc(docRef);
-    
+
     if (docSnap.exists()) {
       return docSnap.data().skills || [];
     } else {
@@ -174,12 +181,12 @@ export async function getAllExperience() {
     const experiencesRef = collection(db, 'experience');
     const q = query(experiencesRef, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
-    
+
     const experiences = [];
     querySnapshot.forEach((doc) => {
       experiences.push({ docId: doc.id, ...doc.data() });
     });
-    
+
     if (experiences.length > 0) {
       return experiences;
     } else {
@@ -204,12 +211,12 @@ export async function getAllEducation() {
     const educationRef = collection(db, 'education');
     const q = query(educationRef, orderBy('createdAt', 'desc'));
     const querySnapshot = await getDocs(q);
-    
+
     const educations = [];
     querySnapshot.forEach((doc) => {
       educations.push({ docId: doc.id, ...doc.data() });
     });
-    
+
     if (educations.length > 0) {
       return educations;
     } else {
